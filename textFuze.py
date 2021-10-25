@@ -87,7 +87,8 @@ def refresh_text():
         timerSpeed = sleepTime
     print(timerSpeed)
     # Update the text
-    update_text(props="", prop="")
+    if obs.obs_source_active(obs.obs_get_source_by_name(TSourceOutputName)):
+        update_text(props="", prop="")
 
 def script_properties(): # Get the property boxes so we cant use them here
     props = obs.obs_properties_create()
