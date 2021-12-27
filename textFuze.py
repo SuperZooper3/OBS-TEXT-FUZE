@@ -2,11 +2,13 @@ import obspython as obs
 
 TSourceOutputName = "" # Text source being written to in OBS
 indexFile = "" # List of input text files to fuze
+outputFile = "" # Path to the output file
 formattingString = "" # Formatting string for the output text
 lastString = "" # Compare last and new string
 refreshTime = 5 # Refresh time of the text source
 sleepTime = 20 # The polling rate when not active
-timerSpeed = refreshTime 
+timerSpeed = refreshTime
+fileOutput = True
 
 # ACTUAL TEXT UPDATING ------------------------------------------------------------
 
@@ -40,11 +42,28 @@ def update_text(props, prop):
     # Update the text source only if it has changed
     if outputText != lastString:
         lastString = outputText
+        write_output(outputText)
+
+# Function to either write to a file, or to the text source in OBS
+def write_output(message):
+    global fileOutput
+    global outputFile
+    global TSourceOutputName
+
+    # Create a new file called fuzed.txt at the path spectifed in outputFile and write the message to it, then close it
+    if fileOutput:
+        with open(outputFile, "a") as file:
+            # Clear the file
+            file.truncate(0) 
+            # Write the message to the file
+            file.write(message)
+
+    else:
         settings = obs.obs_data_create()
-        obs.obs_data_set_string(settings, "text", outputText)
+        obs.obs_data_set_string(settings, "text", message)
         obs.obs_source_update(obs.obs_get_source_by_name(TSourceOutputName), settings)
         obs.obs_data_release(settings) # #NoMemLeaks
-
+    
 # OBS SETTINGS STUFF------------------------------------------------------------
 
 def script_description():
@@ -56,17 +75,21 @@ def script_update(settings):
     global refreshTime
     global formattingString
     global sleepTime
+    global outputFile
+    global fileOutput
 
     TSourceOutputName = obs.obs_data_get_string(settings, "TSourceOutputName")
     indexFile = obs.obs_data_get_string(settings, "indexFile")
     formattingString = obs.obs_data_get_string(settings, "formattingString")
     refreshTime = obs.obs_data_get_int(settings, "refreshTime")
     sleepTime = obs.obs_data_get_int(settings, "sleepTime")
+    outputFile = obs.obs_data_get_string(settings, "outputFile")
+    fileOutput = obs.obs_data_get_bool(settings, "fileOutput")
 
     # Update the refresh timer
     obs.timer_remove(refresh_text)
     
-    if refreshTime > 0 and TSourceOutputName != "" and indexFile != "" and formattingString != "":
+    if refreshTime > 0  and indexFile != "" and formattingString != "" and (not fileOutput  and TSourceOutputName != "" or (fileOutput and outputFile != "")):
         obs.timer_add(refresh_text, refreshTime * 1000)
 
 def script_defaults(settings): # Sets the defaults for the values in the obs editor
@@ -85,7 +108,7 @@ def refresh_text():
         obs.timer_remove(refresh_text)
         obs.timer_add(refresh_text, sleepTime * 1000)
         timerSpeed = sleepTime
-    print(timerSpeed)
+
     # Update the text
     if obs.obs_source_active(obs.obs_get_source_by_name(TSourceOutputName)):
         update_text(props="", prop="")
@@ -105,20 +128,17 @@ def script_properties(): # Get the property boxes so we cant use them here
             if source_id == "text_gdiplus" or source_id == "text_ft2_source":
                 name = obs.obs_source_get_name(source)
                 obs.obs_property_list_add_string(p, name, name)
+                
         obs.source_list_release(sources)
 
     obs.obs_properties_add_path(props, "indexFile", "Index File Directory", obs.OBS_PATH_FILE, "", "")
     obs.obs_properties_add_text(props, "formattingString", "Formatting String", obs.OBS_TEXT_DEFAULT)
     obs.obs_properties_add_int(props, "refreshTime", "Refresh Time", 1, 999, 1)
     obs.obs_properties_add_int(props, "sleepTime", "Sleep Refresh Time", 1, 999, 1)
+    obs.obs_properties_add_path(props, "outputFile", "Output File (.txt)", obs.OBS_PATH_FILE, "", "")
+    obs.obs_properties_add_bool(props, "fileOutput", "Output to File (true) or to source (false)")
 
     # Refresh button 
     obs.obs_properties_add_button(props, "button", "Refresh", update_text)
 
     return props
-
-# When the source is activated, update the text
-def activate():
-    update_text(props="", prop="")
-
-    obs.timer_remove(refresh_text)
